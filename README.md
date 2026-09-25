@@ -177,7 +177,7 @@ Images are **not redistributed** here. Each source has its own license; please o
 NM Salleh, Yun Xi Ang, Wen Lin Ching, Joey Zhu Yi Ng, Rui Xi Koh, Jia Yin Lim, Yi Ning Tee
 Sunway Business School, Sunway University, Malaysia
 
-## Citation
+<!-- ## Citation
 
 ```bibtex
 @inproceedings{pavex2026autoannotation,
@@ -187,7 +187,7 @@ Sunway Business School, Sunway University, Malaysia
   year      = {2026},
   address   = {Barcelona, Spain}
 }
-```
+``` -->
 
 ## License
 
