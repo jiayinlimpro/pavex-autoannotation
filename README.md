@@ -6,14 +6,18 @@ Manually drawing polygon masks for road defects takes several minutes per image 
 
 > 📄 This repository accompanies the paper *"Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything for YOLOv8 Segmentation"* (CDSR 2026). <!-- TODO: add paper link / DOI once available -->
 
-<!-- TODO: add 2–3 overlay images from overlays_seg_eval/ into docs/images/ and uncomment
+
 <p align="center">
-  <img src="docs/images/example_1.jpg" width="30%">
-  <img src="docs/images/example_2.jpg" width="30%">
-  <img src="docs/images/example_3.jpg" width="30%">
+  <img src="docs/images/img_0301__blur3.jpg" width="30%">
+  <img src="docs/images/img_0308__hflip.jpg" width="30%">
+  <img src="docs/images/img_0111__hflip.jpg" width="30%">
+  <img src="docs/images/img_0020__gamma0p73.jpg" width="30%">
+  <img src="docs/images/img_0154__blur3.jpg" width="30%">
+  <img src="docs/images/img_0253__dark25.jpg" width="30%">
+
 </p>
 <p align="center"><em>Green: GroundingDINO boxes · Red: SAM masks after filtering</em></p>
--->
+
 
 ---
 
