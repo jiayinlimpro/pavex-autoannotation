@@ -1,0 +1,92 @@
+{
+  "created": "2025-11-12 11:31",
+  "phase": "11_sam_seeding_v11b",
+  "paths": {
+    "hf_repo_grounding_dino": "IDEA-Research/grounding-dino-base",
+    "sam_weights_file": "sam_vit_h_4b8939.pth"
+  },
+  "models": {
+    "SAM": {
+      "arch": "vit_h",
+      "sha256": "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e"
+    },
+    "GroundingDINO": {
+      "hf_repo": "IDEA-Research/grounding-dino-base"
+    }
+  },
+  "prompts": [
+    "potholes.",
+    "pothole.",
+    "road pothole.",
+    "asphalt hole."
+  ],
+  "thresholds": {
+    "TEXT_THR": 0.4,
+    "BOX_THR": 0.24,
+    "NMS_THR": 0.33,
+    "TOPK": 30,
+    "UNION_NMS": 0.5,
+    "UNION_TOPK": 40
+  },
+  "selective_crops": {
+    "use_global": true,
+    "use_lower_half": true,
+    "lower_half_y0_frac": 0.4,
+    "global_text_thr_add": 0.05,
+    "lower_text_thr_sub": 0.08,
+    "global_max_area_frac": 0.4,
+    "lower_max_area_frac": 0.75,
+    "early_hit": 4
+  },
+  "sam_prompting": {
+    "jitters_px": [
+      0,
+      4,
+      8
+    ],
+    "dark_points_k": 2,
+    "dilate_box_small": 0.22,
+    "dilate_box_med": 0.16,
+    "dilate_box_large": 0.1
+  },
+  "post_filters": {
+    "max_area_frac": 0.65,
+    "edge_touches_rule": {
+      "on": true,
+      "area_frac_gate": 0.4,
+      "min_edges_touched": 3
+    },
+    "solidity_min": 0.48,
+    "pothole_likelihood": {
+      "TAU_POS": 0.34,
+      "TAU_NEG": 0.5
+    },
+    "manhole_gate": {
+      "circ>=0.90": true,
+      "fill_ratio>=0.91": true,
+      "area_frac_range": [
+        0.004,
+        0.12
+      ],
+      "ring_strength>=8.0": true,
+      "entropy<=4.6": true
+    }
+  },
+  "refine": {
+    "REFINE_ITERS": 4,
+    "GROW_PX": 6
+  },
+  "env": {
+    "python": "3.12.12",
+    "torch": "2.8.0+cu126",
+    "transformers": "4.57.1",
+    "timm": "1.0.22",
+    "accelerate": "1.11.0",
+    "opencv-python-headless": "4.10.0",
+    "supervision": "0.26.1",
+    "huggingface_hub": "0.36.0",
+    "segment-anything": "1.0",
+    "cuda_available": true
+  },
+  "code_hash_sha256": "a9c33b513ba110502fa310a6d69b6f086747cdb415ece9c565fc1daa209605e3"
+}
