@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to paths.local.json (not committed) and edit. Relative paths start from the repo root. Use forward slashes on Windows.",
+  "config_dir": "configs",
+  "sam_weights": "../pavex-data/models/sam_vit_h_4b8939.pth",
+  "images_dir": "../pavex-data/images",
+  "eval_images_dir": "../pavex-data/originals",
+  "gt_labels_dir": "../pavex-data/labels_gt",
+  "runs_dir": "../pavex-data/runs"
+}

@@ -1,0 +1,12 @@
+{
+  "TP": 241,
+  "FP": 131,
+  "FN": 24,
+  "precision": 0.6478494623655914,
+  "recall": 0.909433962264151,
+  "IoU_mean": 0.8379909303598456,
+  "Dice_mean": 0.9070538535078647,
+  "neg_imgs": 0,
+  "FP_per_neg_img": null,
+  "skipped_labels": []
+}

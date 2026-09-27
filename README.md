@@ -2,10 +2,9 @@
 
 **Automatic pixel-level annotation of pothole images using GroundingDINO + Segment Anything (SAM), exported in YOLOv8-seg format.**
 
-Manually drawing polygon masks for road defects takes several minutes per image and does not scale. This project builds an **inference-only** pipeline that turns raw road images into YOLOv8-seg training labels with no manual polygon drawing. It uses pretrained foundation models (no fine-tuning) combined with domain-informed filtering rules.
+Manually drawing polygon masks for road defects takes several minutes per image and does not scale. This project builds an **inference-only** pipeline that turns raw road images into YOLOv8-seg training labels with no manual polygon drawing. It combines pretrained foundation models (no fine-tuning) with domain-informed filtering rules.
 
 > 📄 This repository accompanies the paper *"Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything for YOLOv8 Segmentation"* (CDSR 2026). <!-- TODO: add paper link / DOI once available -->
-
 
 <p align="center">
   <img src="docs/images/img_0301__blur3.jpg" width="30%">
@@ -14,10 +13,11 @@ Manually drawing polygon masks for road defects takes several minutes per image 
   <img src="docs/images/img_0020__gamma0p73.jpg" width="30%">
   <img src="docs/images/img_0154__blur3.jpg" width="30%">
   <img src="docs/images/img_0253__dark25.jpg" width="30%">
-
+  <img src="docs/images/img_0140__blur3.jpg" width="30%">
+  <img src="docs/images/img_0224__gamma1p35.jpg" width="30%">
+  <img src="docs/images/img_0453__gamma1p13.jpg" width="30%">
 </p>
 <p align="center"><em>Green: GroundingDINO boxes · Red: SAM masks after filtering</em></p>
-
 
 ---
 
@@ -36,14 +36,14 @@ flowchart LR
 
 | Stage | What it does | Why it exists |
 |---|---|---|
-| 1. Box proposal | GroundingDINO detects regions matching pothole-related text prompts in one forward pass | Zero-shot localisation, no training needed |
+| 1. Box proposal | GroundingDINO detects regions matching pothole-related text prompts | Zero-shot localisation, no training needed |
 | 2. Road-band suppression | Removes boxes that span the image edge-to-edge or cover ≥ 75% of it | GroundingDINO often labels the whole road surface as a "pothole" |
-| 3. Segmentation | Each remaining box is sent to SAM as a box-only prompt (`multimask_output=False`) | Box prompts give more stable masks than point prompts |
-| 4. Consolidation | Mask-level NMS and nested-mask suppression | Removes duplicate / overlapping masks |
+| 3. Segmentation | Each remaining box is sent to SAM as a box-only prompt | Box prompts give more stable masks than point prompts |
+| 4. Consolidation | Mask-level NMS and nested-mask suppression | Removes duplicate and overlapping masks |
 | 5. Post-filters | Drops masks that are too small, too large, low-solidity, or large and border-touching | Rejects geometrically implausible regions |
 | 6. Export | Largest contour → simplified polygon → normalised YOLOv8-seg label | Direct input for YOLOv8-seg training |
 
-### Final configuration (paper, Table 2)
+### Configuration (paper, Table 2)
 
 | Parameter | Value | Parameter | Value |
 |---|---|---|---|
@@ -55,13 +55,13 @@ flowchart LR
 | Huge-box area | 0.75 | Polygon simplification ε | 1.5 px |
 | SAM backbone | ViT-H | Min contour area | 10 px |
 
-Runtime values are read from `configs/pipeline_config.json` and `configs/seed_input.json`.
+Values are read from `configs/pipeline_config.json` and `configs/seed_input.json`. `pipeline_config.json` also contains settings from an earlier exploratory pipeline (manhole gate, likelihood scoring, refinement) that the notebook does not use.
 
 ---
 
 ## Results
 
-Evaluated on an independent, manually annotated **200-image** ground-truth subset (instance matching at IoU ≥ 0.5, greedy one-to-one).
+Evaluated on an independent, manually annotated **200-image** ground-truth subset (greedy one-to-one instance matching at mask IoU ≥ 0.5).
 
 | Metric | Value |
 |---|---|
@@ -73,9 +73,7 @@ Evaluated on an independent, manually annotated **200-image** ground-truth subse
 | Mean IoU (matched only) | 0.838 |
 | Mean Dice (matched only) | 0.907 |
 
-The pipeline is intentionally **recall-first**. For dataset construction, a missed pothole is permanently lost supervision, whereas a false positive can be removed in a quick accept/reject screening pass. Raw outputs: [`results/seg_eval_summary.json`](results/seg_eval_summary.json), [`results/seg_eval_per_image.csv`](results/seg_eval_per_image.csv).
-
-A downstream YOLOv8s-seg model trained on the screened auto-labels is reported in the paper (Table 7) as a usability check; its training code is not yet included in this repository.
+The pipeline is intentionally **recall-first**. For dataset construction, a missed pothole is permanently lost supervision, whereas a false positive can be removed in a quick accept/reject screening pass. Re-runs may differ slightly in exact counts because of GPU non-determinism and library versions; see [`results/`](results/).
 
 ---
 
@@ -85,50 +83,80 @@ A downstream YOLOv8s-seg model trained on the screened auto-labels is reported i
 pavex-autoannotation/
 ├── README.md
 ├── LICENSE
-├── requirements.txt
+├── requirements.txt              # locked versions
+├── .gitignore
 ├── notebooks/
-│   └── fullexportrun.ipynb       # full pipeline: load models → auto-annotate → evaluate
+│   └── fullexportrun.ipynb       # full pipeline: config → models → auto-annotate → evaluate
 ├── configs/
 │   ├── pipeline_config.json      # model IDs, prompts, thresholds, post-filters
-│   └── seed_input.json           # post-filter overrides (min area, solidity)
+│   ├── seed_input.json           # post-filter overrides (min area, max area, solidity)
+│   └── paths.example.json        # template for your local paths
 ├── results/
-│   ├── seg_eval_summary.json
-│   └── seg_eval_per_image.csv
+│   ├── README.md
+│   └── seg_eval_summary.json
 └── docs/images/                  # example overlays
 ```
 
+Data and model weights are **not** stored in this repository.
+
 ---
 
-## Getting started (Google Colab)
+## Getting started
 
-The notebook was developed on Google Colab with a GPU runtime.
+### 1. Download the SAM weights
 
-**1. Get the model weights** (not stored in this repo):
-- **SAM ViT-H**: download [`sam_vit_h_4b8939.pth`](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth) (~2.4 GB) from [Meta's Segment Anything repo](https://github.com/facebookresearch/segment-anything).
-- **GroundingDINO**: `IDEA-Research/grounding-dino-base` downloads automatically from Hugging Face.
+- **SAM ViT-H:** [`sam_vit_h_4b8939.pth`](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth) (~2.4 GB) from [Meta's Segment Anything repo](https://github.com/facebookresearch/segment-anything)
+- **GroundingDINO** (`IDEA-Research/grounding-dino-base`) downloads automatically from Hugging Face on first run.
 
-**2. Arrange your Google Drive** like this (paths are set in Cell 0 of the notebook):
+### 2a. Run on Google Colab (GPU recommended)
 
+1. Open `notebooks/fullexportrun.ipynb` in Colab and select **Runtime → Change runtime type → T4 GPU**.
+2. Place the config files, SAM weights, images and ground-truth labels on Google Drive, and set the folders in the **Colab section of Cell 0**.
+3. Run all cells. Dependencies install automatically.
+
+### 2b. Run locally (Windows, Python 3.12)
+
+```bat
+py -V:3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt ipykernel
 ```
-My Drive/
-├── pavex_bbox_experiments/exports/pavex_sam_seed_pack_v11b/
-│   ├── pipeline_config.json      # copy from configs/
-│   ├── seed_input.json           # copy from configs/
-│   └── models/sam_vit_h_4b8939.pth
-└── BigDataset/
-    ├── augmented/                # input images (.jpg / .jpeg / .png)
-    └── labels_gt/                # ground-truth YOLOv8-seg labels (for evaluation)
-```
 
-**3. Run the notebook.** Open `notebooks/fullexportrun.ipynb` in Colab, set **Runtime → Change runtime type → GPU**, then run all cells. Outputs are written to `BigDataset/runs_sam_refined_v11b_augmented/`:
+1. Copy `configs/paths.example.json` to `configs/paths.local.json` and set your folders. The default layout keeps data next to the repo:
+   ```
+   PaveX/
+   ├── pavex-autoannotation/     ← this repository
+   └── pavex-data/
+       ├── images/               images to auto-annotate
+       ├── originals/            original images for evaluation (img_XXXX.jpg)
+       ├── labels_gt/            ground-truth YOLOv8-seg labels
+       ├── models/               sam_vit_h_4b8939.pth
+       └── runs/                 created by the notebook
+   ```
+2. Open the notebook in VS Code, select the `.venv` kernel and run all cells.
 
-| Folder / file | Contents |
+Without an NVIDIA GPU, set `MAX_IMAGES = 5` in Cell 0 for a quick test (~50 s per image on CPU).
+
+### Run settings (Cell 0)
+
+| Setting | Purpose |
 |---|---|
-| `labels_pred_seg/` | Auto-generated YOLOv8-seg labels (one `.txt` per image) |
-| `overlays_all_seg/` | QA overlays for every image |
-| `overlays_seg_eval/` | QA overlays for the ground-truth subset |
-| `eval/seg_eval_summary.json` | Precision, recall, mean IoU / Dice |
-| `eval/seg_eval_per_image.csv` | Per-image TP / FP / FN and IoU / Dice |
+| `RUN_ANNOTATE` | Auto-annotate every image in `images_dir` |
+| `RUN_EVAL` | Evaluate on the ground-truth subset |
+| `MAX_IMAGES` | Limit the number of images (e.g. `5` for a test); `None` = all |
+| `SKIP_EXISTING` | Resume an interrupted run (set `RUN_NAME` to that run's folder) |
+
+### Outputs
+
+Each run gets its own folder, `runs/run_<timestamp>/`:
+
+| Output | Contents |
+|---|---|
+| `labels_pred_seg/` | YOLOv8-seg labels (`cls x1 y1 … xn yn`), one `.txt` per image |
+| `overlays_all_seg/`, `overlays_seg_eval/` | QA overlays |
+| `eval/` | `seg_eval_summary.json` and `seg_eval_per_image.csv` |
+| `pipeline_config.json`, `seed_input.json`, `run_info.json` | Configuration and environment used for the run |
+
+Runtime is about 3.5 s per image on a Colab T4 GPU.
 
 ---
 
@@ -153,17 +181,14 @@ Images are **not redistributed** here. Each source has its own license; please o
 [13](https://www.kaggle.com/datasets/banilkumar20phd7071/pothole-and-normal-road-pavement-augmented-data) ·
 [14](https://www.kaggle.com/datasets/gauravduttakiit/pothole-detection-using-ml)
 
----
+<!-- ---
 
-## Known issues (fixes in progress)
+## Notes
 
-- **Label export format:** `binary_mask_to_yolov8_seg_line` currently writes `cls cx cy w h x1 y1 …`. Standard YOLOv8-seg is polygon-only (`cls x1 y1 x2 y2 …`), so the four bbox values should be removed.
-- **Nested-mask suppression:** the IoU ≥ 0.70 and area-ratio ≤ 0.70 conditions can almost never hold together. The rule should use containment (intersection ÷ smaller-mask area).
-- **Box/mask alignment:** mask filtering steps do not drop the matching boxes, so the edge-touch rule and overlays can pair a mask with the wrong box.
-- **Colab-only:** the notebook uses `google.colab` and `!pip` magics; a standalone script version is planned.
-- **Config fallbacks:** hard-coded defaults in the code differ from the paper; always supply the files in `configs/`.
+- **Code updates after the paper:** YOLOv8-seg labels are now written polygon-only; nested-mask suppression uses containment; masks and boxes stay aligned through all filters. The notebook also runs locally as well as on Colab.
+- The prompts are joined as in the original experiments (`"potholes. . pothole. . …"`); this is kept for comparability.
 
----
+--- -->
 
 ## Built with
 
@@ -172,12 +197,12 @@ Images are **not redistributed** here. Each source has its own license; please o
 [OpenCV](https://opencv.org/) ·
 [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) (downstream training)
 
-## Authors
+<!-- ## Authors
 
 NM Salleh, Yun Xi Ang, Wen Lin Ching, Joey Zhu Yi Ng, Rui Xi Koh, Jia Yin Lim, Yi Ning Tee
 Sunway Business School, Sunway University, Malaysia
 
-<!-- ## Citation
+## Citation
 
 ```bibtex
 @inproceedings{pavex2026autoannotation,
