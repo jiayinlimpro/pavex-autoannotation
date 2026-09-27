@@ -4,7 +4,7 @@
 
 Manually drawing polygon masks for road defects takes several minutes per image and does not scale. This project builds an **inference-only** pipeline that turns raw road images into YOLOv8-seg training labels with no manual polygon drawing. It combines pretrained foundation models (no fine-tuning) with domain-informed filtering rules.
 
-> 📄 This repository accompanies the paper *"Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything for YOLOv8 Segmentation"* (CDSR 2026). <!-- TODO: add paper link / DOI once available -->
+<!-- > 📄 This repository accompanies the paper *"Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything for YOLOv8 Segmentation"* (CDSR 2026). TODO: add paper link / DOI once available -->
 
 <p align="center">
   <img src="docs/images/img_0301__blur3.jpg" width="30%">
