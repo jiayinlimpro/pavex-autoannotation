@@ -1,0 +1,23 @@
+{
+  "notebook_commit": "fcec84f+notebook-uncommitted",
+  "notebook_version": "b3_fp_analysis v1.0 (2026-10-11)",
+  "source_run_commit": "fcec84f",
+  "source_per_instance_sha256": "6ddfe1c9d4cb2ae78e90e7eb6748c3402f2fe2aae762d4b55c2d343f61c5c386",
+  "selection_rule": "B3 FP rows with best_iou_any <= 0.1",
+  "counts": {
+    "fp_total": 114,
+    "selected_le_0.1": 88,
+    "selected_exactly_0": 71,
+    "selected_between_0_and_0.1": 17,
+    "boundary_0.1_to_0.5": 26
+  },
+  "order": "image name, then line order in the B3 label file",
+  "tile": {
+    "crop": "bbox x1.3 (square, min 128 px) -> 256x256",
+    "pred": "red outline",
+    "gt": "green outline",
+    "thumbnail": "192 px, FP box in red, GT outlines in green"
+  },
+  "mapping_check": "best_iou_any and pred_area_px recomputed from each polygon; all matched",
+  "created": "2026-10-11T16:15:51"
+}

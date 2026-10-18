@@ -1,0 +1,15 @@
+{
+  "BACKBONE": "sam-vit-huge",
+  "PROMPT_SRC": "GroundingDINO",
+  "SEED_SRC": "/content/drive/MyDrive/pavex_bbox_experiments/configs/final/seed_raw_sam_v1.json",
+  "FILTER_MASK": 1,
+  "POST_FILTERS": {
+    "min_area": 200,
+    "max_area_frac": 0.5,
+    "solidity_min": 0.6
+  },
+  "_meta": {
+    "phase": "11_sam_seeding",
+    "created": "2025-11-12 11:31"
+  }
+}

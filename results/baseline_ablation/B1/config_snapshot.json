@@ -1,0 +1,52 @@
+{
+  "config": "B1",
+  "flags": {
+    "USE_ROAD_BAND": true,
+    "USE_MASK_NMS": false,
+    "USE_NESTED": false,
+    "USE_POSTFILTERS": false
+  },
+  "prediction_masks": "exported YOLOv8-seg polygons, rasterised with read_yolo_seg_masks (same reader as GT)",
+  "frozen": {
+    "PROMPTS": [
+      "potholes.",
+      "pothole.",
+      "road pothole.",
+      "asphalt hole."
+    ],
+    "HF_REPO": "IDEA-Research/grounding-dino-base",
+    "BOX_THR": 0.24,
+    "NMS_THR": 0.33,
+    "MARGIN_FRAC": 0.02,
+    "MIN_ROAD_AREA_FRAC": 0.2,
+    "MIN_ROAD_HEIGHT_FRAC": 0.3,
+    "MIN_ROAD_WIDTH_FRAC": 0.3,
+    "HUGE_BOX_AREA_FRAC": 0.75,
+    "SAM_ARCH": "vit_h",
+    "MULTIMASK_OUTPUT": false,
+    "MASK_NMS_IOU": 0.7,
+    "NESTED_CONTAINMENT": 0.9,
+    "NESTED_AREA_RATIO_MAX": 0.7,
+    "MIN_MASK_AREA": 200.0,
+    "MAX_AREA_FRAC": 0.5,
+    "SOLIDITY_MIN": 0.6,
+    "EDGE_RULE_ON": true,
+    "EDGE_AREA_FRAC_GATE": 0.4,
+    "EDGE_MIN_EDGES_TOUCHED": 3,
+    "MIN_CONTOUR_AREA_PX": 10,
+    "SIMPLIFY_EPS_PX": 1.5,
+    "IOU_THR_EVAL": 0.5
+  },
+  "prompt_string": "potholes. . pothole. . road pothole. . asphalt hole.",
+  "text_threshold_note": "TEXT_THR is not passed to post-processing; boxes are filtered by BOX_THR only",
+  "pipeline_order": "[road-band] -> box NMS -> drop empty SAM masks -> [mask NMS] -> [nested] -> [post-filters]",
+  "export": "largest external contour only, approxPolyDP eps 1.5 px, contour area >= 10 px, coords clipped to [0,1]",
+  "evaluation": {
+    "subset": "200-image human-annotated GT subset (labels_gt)",
+    "gt": "YOLOv8-seg polygons, one polygon = one instance, filled to binary masks",
+    "matching": "greedy one-to-one by decreasing mask IoU; TP if IoU >= 0.5",
+    "averaging": "micro over all images; mean IoU/Dice over TP pairs only",
+    "export_drop_rule": "masks with no exported polygon are not predictions (not FP); unmatched GT stay FN"
+  },
+  "seed": 0
+}
