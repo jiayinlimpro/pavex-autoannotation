@@ -1,10 +1,10 @@
 # PaveX Auto-Annotation
 
-**Automatic pixel-level annotation of pothole images using GroundingDINO + Segment Anything (SAM), exported in YOLOv8-seg format.**
+**Domain-aware automatic pixel-level annotation of pothole images using GroundingDINO and Segment Anything (SAM), exported in YOLOv8-seg format.**
 
-Manually drawing polygon masks for road defects takes several minutes per image and does not scale. This project builds an **inference-only** pipeline that turns raw road images into YOLOv8-seg training labels with no manual polygon drawing. It combines pretrained foundation models (no fine-tuning) with domain-informed filtering rules.
+Drawing polygon masks around irregular road defects by hand is slow and does not scale. This project builds an **inference-only** pipeline that turns raw road images into YOLOv8-seg training labels without manual polygon drawing. It combines pretrained foundation models (no training or fine-tuning) with simple domain-aware rules for road imagery.
 
-<!-- > 📄 This repository accompanies the paper *"Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything for YOLOv8 Segmentation"* (CDSR 2026). TODO: add paper link / DOI once available -->
+<!-- 📄 This repository accompanies the paper "Domain-Aware Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything". TODO: add journal, link and DOI once available. -->
 
 <p align="center">
   <img src="docs/images/img_0301__blur3.jpg" width="30%">
@@ -26,54 +26,60 @@ Manually drawing polygon masks for road defects takes several minutes per image 
 ```mermaid
 flowchart LR
     A[Road image] --> B[GroundingDINO<br/>text-prompted boxes]
-    B --> C[Road-band suppression<br/>remove road-like boxes]
-    C --> D[SAM<br/>box prompt → mask]
-    D --> E[Mask consolidation<br/>mask NMS + nested suppression]
-    E --> F[Post-filters<br/>area · solidity · edge-touch]
-    F --> G[YOLOv8-seg<br/>polygon labels]
-    F --> H[QA overlays]
+    B --> C[Road-band filter<br/>remove road-like boxes]
+    C --> D[Box NMS]
+    D --> E[SAM<br/>box prompt → mask]
+    E --> F[Mask consolidation<br/>mask NMS + nested suppression]
+    F --> G[Post-filters<br/>area · solidity · edge-touch]
+    G --> H[YOLOv8-seg<br/>polygon labels]
+    G --> I[QA overlays]
 ```
 
 | Stage | What it does | Why it exists |
 |---|---|---|
 | 1. Box proposal | GroundingDINO detects regions matching pothole-related text prompts | Zero-shot localisation, no training needed |
-| 2. Road-band suppression | Removes boxes that span the image edge-to-edge or cover ≥ 75% of it | GroundingDINO often labels the whole road surface as a "pothole" |
-| 3. Segmentation | Each remaining box is sent to SAM as a box-only prompt | Box prompts give more stable masks than point prompts |
-| 4. Consolidation | Mask-level NMS and nested-mask suppression | Removes duplicate and overlapping masks |
-| 5. Post-filters | Drops masks that are too small, too large, low-solidity, or large and border-touching | Rejects geometrically implausible regions |
-| 6. Export | Largest contour → simplified polygon → normalised YOLOv8-seg label | Direct input for YOLOv8-seg training |
+| 2. Road-band filter | Removes boxes that span the image edge to edge, or cover ≥ 75% of it | GroundingDINO often labels the whole road surface as a "pothole" |
+| 3. Box NMS | Removes duplicate, strongly overlapping boxes | Avoids redundant SAM prompts |
+| 4. Segmentation | Each remaining box is sent to SAM as a box-only prompt | Box prompts give more stable masks than point prompts |
+| 5. Consolidation | Mask-level NMS, then nested-mask suppression | Removes duplicate and nested masks |
+| 6. Post-filters | Drops masks that are too small, too large, low-solidity, or large and border-touching | Rejects geometrically implausible regions |
+| 7. Export | Largest contour → Douglas–Peucker simplification → normalised YOLOv8-seg label | Direct input for YOLOv8-seg training |
 
 ### Configuration (paper, Table 2)
 
 | Parameter | Value | Parameter | Value |
 |---|---|---|---|
-| Prompts | `potholes`, `pothole`, `road pothole`, `asphalt hole` | Mask NMS IoU | 0.70 |
-| `BOX_THR` | 0.24 | Min mask area | 200 px |
-| Box `NMS_THR` | 0.33 | Max mask area fraction | 0.50 |
-| Edge margin | 2% | Min solidity | 0.60 |
-| Road-band min area / height / width | 0.20 / 0.30 / 0.30 | Edge rule (area gate / edges) | 0.40 / ≥ 3 |
-| Huge-box area | 0.75 | Polygon simplification ε | 1.5 px |
-| SAM backbone | ViT-H | Min contour area | 10 px |
+| Text query | `potholes. . pothole. . road pothole. . asphalt hole.` | Mask NMS IoU | 0.70 |
+| `BOX_THR` | 0.24 | Nested suppression | containment ≥ 0.90, area ratio ≤ 0.70 |
+| Box `NMS_THR` | 0.33 | Min mask area | 200 px |
+| Edge margin | 2% | Max mask area fraction | 0.50 |
+| Road-band min area / height / width | 0.20 / 0.30 / 0.30 | Min solidity | 0.60 |
+| Huge-box area | 0.75 | Edge rule (area gate / edges) | 0.40 / ≥ 3 |
+| SAM backbone | ViT-H, one mask per box | Polygon simplification ε | 1.5 px |
+| GroundingDINO model | `IDEA-Research/grounding-dino-base` | Min contour area | 10 px |
 
-Values are read from `configs/pipeline_config.json` and `configs/seed_input.json`. `pipeline_config.json` also contains settings from an earlier exploratory pipeline (manhole gate, likelihood scoring, refinement) that the notebook does not use.
+Notes:
+- The four prompts are joined with `" . "`, which gives the exact query shown above. This is kept for comparability with the original experiments.
+- Boxes are filtered by `BOX_THR` only. `TEXT_THR` appears in the config but is not used for filtering; in the Transformers post-processing it only assigns phrase labels to boxes.
+- Ranking rules: box NMS and mask NMS are greedy by GroundingDINO box confidence; in nested suppression the larger mask (by area) is treated as the container; evaluation matching is greedy by decreasing mask IoU.
+- Values are read from `configs/pipeline_config.json` and `configs/seed_input.json`. `pipeline_config.json` also contains settings from earlier exploratory pipelines (for example `TOPK`, selective crops, manhole gate, likelihood scoring and refinement) that the notebooks do not use.
 
 ---
 
 ## Results
 
-Evaluated on an independent, manually annotated **200-image** ground-truth subset (greedy one-to-one instance matching at mask IoU ≥ 0.5).
+Evaluated on an independent, manually annotated **200-image** ground-truth subset (265 potholes). Predictions are scored as exported YOLOv8-seg polygons, rasterised with the same reader as the ground truth, using greedy one-to-one matching at mask IoU ≥ 0.5. Mean IoU and Dice are computed over matched pairs only.
 
-| Metric | Value |
-|---|---|
-| True Positives | 241 |
-| False Positives | 131 |
-| False Negatives | 24 |
-| Precision | 0.648 |
-| **Recall** | **0.909** |
-| Mean IoU (matched only) | 0.838 |
-| Mean Dice (matched only) | 0.907 |
+| Config | TP | FP | FN | Precision | Recall | F1 | Mean IoU | Mean Dice |
+|---|---|---|---|---|---|---|---|---|
+| B0: GroundingDINO + box NMS + SAM | 238 | 277 | 27 | 0.462 | 0.898 | 0.610 | 0.837 | 0.906 |
+| B1: + road-band filter | 242 | 140 | 23 | 0.634 | 0.913 | 0.748 | 0.841 | 0.910 |
+| B2: + mask NMS + nested suppression | 229 | 122 | 36 | 0.652 | 0.864 | 0.744 | 0.843 | 0.911 |
+| **B3: + post-filters (full pipeline)** | **227** | **114** | **38** | **0.666** | **0.857** | **0.749** | **0.845** | **0.912** |
 
-The pipeline is intentionally **recall-first**. For dataset construction, a missed pothole is permanently lost supervision, whereas a false positive can be removed in a quick accept/reject screening pass. Re-runs may differ slightly in exact counts because of GPU non-determinism and library versions; see [`results/`](results/).
+The road-band filter gives the largest gain, halving false positives while slightly raising recall. Mask NMS removes no masks after box NMS, and nested suppression trades true positives for false positives at a similar rate. Full outputs, per-instance CSVs, figures, the false-positive analysis and provenance (commit, config and code hashes) are in [`results/baseline_ablation/`](results/baseline_ablation/).
+
+> **Note on earlier numbers.** An earlier version of this README reported TP 241 / FP 131 / FN 24 (precision 0.648, recall 0.909). Those results came from a code version in which the nested-suppression rule never fired. They are reproduced exactly when that rule is disabled and raw masks are scored.
 
 ---
 
@@ -83,18 +89,20 @@ The pipeline is intentionally **recall-first**. For dataset construction, a miss
 pavex-autoannotation/
 ├── README.md
 ├── LICENSE
-├── requirements.txt              # locked versions
-├── .gitignore
+├── requirements.txt                  # locked versions
 ├── notebooks/
-│   └── fullexportrun.ipynb       # full pipeline: config → models → auto-annotate → evaluate
+│   ├── fullexportrun.ipynb           # full pipeline: config → models → auto-annotate → evaluate
+│   ├── baseline_ablation.ipynb       # B0–B3 cumulative ablation (cached GroundingDINO + SAM outputs)
+│   └── b3_fp_analysis.ipynb          # contact sheets and tagging of B3 false positives
 ├── configs/
-│   ├── pipeline_config.json      # model IDs, prompts, thresholds, post-filters
-│   ├── seed_input.json           # post-filter overrides (min area, max area, solidity)
-│   └── paths.example.json        # template for your local paths
+│   ├── pipeline_config.json          # model IDs, prompts, thresholds, post-filters
+│   ├── seed_input.json               # post-filter overrides (min area, max area, solidity)
+│   └── paths.example.json            # template for your local paths
 ├── results/
 │   ├── README.md
-│   └── seg_eval_summary.json
-└── docs/images/                  # example overlays
+│   ├── seg_eval_summary.json         # earlier run (superseded, kept for reference)
+│   └── baseline_ablation/            # current results: B0–B3, figures, FP analysis
+└── docs/images/                      # example overlays
 ```
 
 Data and model weights are **not** stored in this repository.
@@ -103,9 +111,9 @@ Data and model weights are **not** stored in this repository.
 
 ## Getting started
 
-### 1. Download the SAM weights
+### 1. Download the model weights
 
-- **SAM ViT-H:** [`sam_vit_h_4b8939.pth`](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth) (~2.4 GB) from [Meta's Segment Anything repo](https://github.com/facebookresearch/segment-anything)
+- **SAM ViT-H:** [`sam_vit_h_4b8939.pth`](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth) (~2.4 GB) from [Meta's Segment Anything repository](https://github.com/facebookresearch/segment-anything).
 - **GroundingDINO** (`IDEA-Research/grounding-dino-base`) downloads automatically from Hugging Face on first run.
 
 ### 2a. Run on Google Colab (GPU recommended)
@@ -121,7 +129,7 @@ py -V:3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt ipykernel
 ```
 
-1. Copy `configs/paths.example.json` to `configs/paths.local.json` and set your folders. The default layout keeps data next to the repo:
+1. Copy `configs/paths.example.json` to `configs/paths.local.json` and set your folders. The default layout keeps the data next to the repository:
    ```
    PaveX/
    ├── pavex-autoannotation/     ← this repository
@@ -134,9 +142,13 @@ py -V:3.12 -m venv .venv
    ```
 2. Open the notebook in VS Code, select the `.venv` kernel and run all cells.
 
-Without an NVIDIA GPU, set `MAX_IMAGES = 5` in Cell 0 for a quick test (~50 s per image on CPU).
+Without an NVIDIA GPU, set `MAX_IMAGES = 5` in Cell 0 for a quick test.
 
-### Run settings (Cell 0)
+### 3. Reproduce the ablation
+
+Open `notebooks/baseline_ablation.ipynb`, which uses the same path settings. It runs GroundingDINO and SAM once per image, caches the outputs, checks on five images that the cached path reproduces the full pipeline exactly, and then evaluates B0–B3. Set `N_IMAGES = None` for the full 200-image run, or a small number for a quick test.
+
+### Run settings (`fullexportrun.ipynb`, Cell 0)
 
 | Setting | Purpose |
 |---|---|
@@ -156,15 +168,25 @@ Each run gets its own folder, `runs/run_<timestamp>/`:
 | `eval/` | `seg_eval_summary.json` and `seg_eval_per_image.csv` |
 | `pipeline_config.json`, `seed_input.json`, `run_info.json` | Configuration and environment used for the run |
 
-Runtime is about 3.5 s per image on a Colab T4 GPU.
+---
+
+## Environment and hardware
+
+| Item | Details |
+|---|---|
+| Software | Python 3.12 (3.12.12 on Colab, 3.12.10 locally), PyTorch 2.8.0 (CUDA 12.6 build on Colab), torchvision 0.23.0, Transformers 4.57.1, segment-anything 1.0, OpenCV 4.10.0; see `requirements.txt` |
+| Full annotation run and evaluation | Google Colab, NVIDIA Tesla T4 (16 GB); about 3.5 s per image |
+| Ablation (B0–B3) | Local CPU (the full pipeline takes about 50 s per image on CPU) |
+
+Re-runs on different hardware or library versions may differ slightly in exact counts because of GPU non-determinism.
 
 ---
 
 ## Dataset
 
-Images were collected from 14 public Kaggle datasets (11,759 raw images), then cleaned by removing sequential dashcam frames, perceptual-hash near-duplicates (hash size 16), blurry images (Laplacian variance < 100), and irrelevant scenes. **2,366 images** remained.
+Images were collected from 14 public Kaggle datasets (11,759 raw images) and cleaned by removing sequential dashcam frames, perceptual-hash near-duplicates, blurred images (Laplacian variance < 100) and irrelevant scenes, leaving **2,366 images**.
 
-Images are **not redistributed** here. Each source has its own license; please obtain them from the original pages:
+Images are **not redistributed** here. Each source has its own licence; please obtain them from the original pages:
 
 [1](https://www.kaggle.com/datasets/atulyakumar98/pothole-detection-dataset) ·
 [2](https://www.kaggle.com/datasets/andrewmvd/pothole-detection) ·
@@ -181,14 +203,9 @@ Images are **not redistributed** here. Each source has its own license; please o
 [13](https://www.kaggle.com/datasets/banilkumar20phd7071/pothole-and-normal-road-pavement-augmented-data) ·
 [14](https://www.kaggle.com/datasets/gauravduttakiit/pothole-detection-using-ml)
 
-<!-- ---
+Ground-truth annotations are available from the authors on reasonable request.
 
-## Notes
-
-- **Code updates after the paper:** YOLOv8-seg labels are now written polygon-only; nested-mask suppression uses containment; masks and boxes stay aligned through all filters. The notebook also runs locally as well as on Colab.
-- The prompts are joined as in the original experiments (`"potholes. . pothole. . …"`); this is kept for comparability.
-
---- -->
+---
 
 ## Built with
 
@@ -204,16 +221,9 @@ Sunway Business School, Sunway University, Malaysia
 
 ## Citation
 
-```bibtex
-@inproceedings{pavex2026autoannotation,
-  title     = {Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything for YOLOv8 Segmentation},
-  author    = {Salleh, N. M. and Ang, Yun Xi and Ching, Wen Lin and Ng, Joey Zhu Yi and Koh, Rui Xi and Lim, Jia Yin and Tee, Yi Ning},
-  booktitle = {Proceedings of the 13th International Conference of Control Systems, and Robotics (CDSR)},
-  year      = {2026},
-  address   = {Barcelona, Spain}
-}
-``` -->
+TODO: add the citation once the paper is published.
+Title: Domain-Aware Automatic Annotation of Pothole Images Using GroundingDINO and Segment Anything -->
 
 ## License
 
-Code is released under the [Apache License 2.0](LICENSE). Model weights and datasets are subject to their original licenses.
+Code is released under the [Apache License 2.0](LICENSE). Model weights and datasets are subject to their original licences.
